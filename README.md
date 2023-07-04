@@ -1,3 +1,6 @@
+#trying to integrate EVCC into VenusOS
+Fork is for private tests
+
 # dbus-goecharger
 Integrate go-eCharger into Victron Energies Venus OS
 
