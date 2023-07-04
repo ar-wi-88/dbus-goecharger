@@ -48,9 +48,9 @@ class DbusGoeChargerService:
     self._dbusservice.add_path('/ProductId', 0xFFFF) # 
     self._dbusservice.add_path('/ProductName', productname)
     self._dbusservice.add_path('/CustomName', productname)    
-    self._dbusservice.add_path('/FirmwareVersion', int(data['fwv'].replace('.', '')))
+    self._dbusservice.add_path('/FirmwareVersion', int(data['version']))
     self._dbusservice.add_path('/HardwareVersion', 2)
-    self._dbusservice.add_path('/Serial', data['sse'])
+    # self._dbusservice.add_path('/Serial', data['sse'])
     self._dbusservice.add_path('/Connected', 1)
     self._dbusservice.add_path('/UpdateIndex', 0)
     
@@ -96,7 +96,7 @@ class DbusGoeChargerService:
     accessType = config['DEFAULT']['AccessType']
     
     if accessType == 'OnPremise': 
-        URL = "http://%s/status" % (config['ONPREMISE']['Host'])
+        URL = "http://%s/api/state" % (config['ONPREMISE']['Host'])
     else:
         raise ValueError("AccessType %s is not supported" % (config['DEFAULT']['AccessType']))
     
@@ -107,7 +107,7 @@ class DbusGoeChargerService:
     accessType = config['DEFAULT']['AccessType']
     
     if accessType == 'OnPremise': 
-        URL = "http://%s/mqtt?payload=%s=%s" % (config['ONPREMISE']['Host'], parameter, value)
+        URL = "http://%s/api/state" % (config['ONPREMISE']['Host'], parameter, value)
     else:
         raise ValueError("AccessType %s is not supported" % (config['DEFAULT']['AccessType']))
     
@@ -165,39 +165,43 @@ class DbusGoeChargerService:
        data = self._getGoeChargerData()
        
        #send data to DBus
-       self._dbusservice['/Ac/L1/Power'] = int(data['nrg'][7] * 0.1 * 1000)
-       self._dbusservice['/Ac/L2/Power'] = int(data['nrg'][8] * 0.1 * 1000)
-       self._dbusservice['/Ac/L3/Power'] = int(data['nrg'][9] * 0.1 * 1000)
-       self._dbusservice['/Ac/Power'] = int(data['nrg'][11] * 0.01 * 1000)
-       self._dbusservice['/Ac/Voltage'] = int(data['nrg'][0])
-       self._dbusservice['/Current'] = max(data['nrg'][4] * 0.1, data['nrg'][5] * 0.1, data['nrg'][6] * 0.1)
-       self._dbusservice['/Ac/Energy/Forward'] = int(float(data['eto']) / 10.0)
+       currentL1 = int(data['chargeCurrents'][0]
+       currentL2 = int(data['chargeCurrents'][1]
+       currentL3 = int(data['chargeCurrents'][2]
+       powerL1 = currentL1 * data['chargeVoltages'][0])
+       powerL2 = currentL2 * data['chargeVoltages'][1])
+       powerL3 = currentL3 * data['chargeVoltages'][2])
+       self._dbusservice['/Ac/L1/Power'] = powerL1
+       self._dbusservice['/Ac/L2/Power'] = powerL2
+       self._dbusservice['/Ac/L3/Power'] = powerL3
+       self._dbusservice['/Ac/Power'] = (powerL1 + powerL2 + powerL3)
+       # self._dbusservice['/Ac/Voltage'] = int(data['nrg'][0])
+       self._dbusservice['/Current'] = max(currentL1, currentL2, currentL3)
+       self._dbusservice['/Ac/Energy/Forward'] = int(data['chargeTotalImport'])
        
-       self._dbusservice['/StartStop'] = int(data['alw'])
-       self._dbusservice['/SetCurrent'] = int(data['amp'])
-       self._dbusservice['/MaxCurrent'] = int(data['ama']) 
+       # self._dbusservice['/StartStop'] = int(data['alw'])
+       self._dbusservice['/SetCurrent'] = int(data['chargeCurrent'])
+       self._dbusservice['/MaxCurrent'] = int(data['chargeCurrent']) 
        
        # update chargingTime, increment charge time only on active charging (2), reset when no car connected (1)
-       timeDelta = time.time() - self._lastUpdate
-       if int(data['car']) == 2 and self._lastUpdate > 0:  # vehicle loads
-         self._chargingTime += timeDelta
-       elif int(data['car']) == 1:  # charging station ready, no vehicle
-         self._chargingTime = 0
-       self._dbusservice['/ChargingTime'] = int(self._chargingTime)
+       # timeDelta = time.time() - self._lastUpdate
+       # if int(data['car']) == 2 and self._lastUpdate > 0:  # vehicle loads
+       #   self._chargingTime += timeDelta
+       # elif int(data['car']) == 1:  # charging station ready, no vehicle
+       #   self._chargingTime = 0
+       self._dbusservice['/ChargingTime'] = int(data['chargeDuration'])
 
        self._dbusservice['/Mode'] = 0  # Manual, no control
-       self._dbusservice['/MCU/Temperature'] = int(data['tmp'])
+       # self._dbusservice['/MCU/Temperature'] = int(data['tmp'])
 
        # value 'car' 1: charging station ready, no vehicle 2: vehicle loads 3: Waiting for vehicle 4: Charge finished, vehicle still connected
        status = 0
-       if int(data['car']) == 1:
-         status = 0
-       elif int(data['car']) == 2:
+       if int(data['charging']) == true:
          status = 2
-       elif int(data['car']) == 3:
-         status = 6
-       elif int(data['car']) == 4:
-         status = 3
+       elif int(data['connected']) == true:
+         status = 1
+       elif int(data['connected']) == false:
+         status = 0
        self._dbusservice['/Status'] = status
 
        #logging
@@ -219,18 +223,18 @@ class DbusGoeChargerService:
     # return true, otherwise add_timeout will be removed from GObject - see docs http://library.isr.ist.utl.pt/docs/pygtk2reference/gobject-functions.html#function-gobject--timeout-add
     return True
  
-  def _handlechangedvalue(self, path, value):
-    logging.info("someone else updated %s to %s" % (path, value))
+#  def _handlechangedvalue(self, path, value):
+#    logging.info("someone else updated %s to %s" % (path, value))
     
-    if path == '/SetCurrent':
-      return self._setGoeChargerValue('amp', value)
-    elif path == '/StartStop':
-      return self._setGoeChargerValue('alw', value)
-    elif path == '/MaxCurrent':
-      return self._setGoeChargerValue('ama', value)
-    else:
-      logging.info("mapping for evcharger path %s does not exist" % (path))
-      return False
+#    if path == '/SetCurrent':
+#      return self._setGoeChargerValue('amp', value)
+#    elif path == '/StartStop':
+#      return self._setGoeChargerValue('alw', value)
+#    elif path == '/MaxCurrent':
+#      return self._setGoeChargerValue('ama', value)
+#    else:
+#      logging.info("mapping for evcharger path %s does not exist" % (path))
+#      return False
 
 
 def main():
