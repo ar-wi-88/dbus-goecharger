@@ -14,6 +14,7 @@ import sys
 import time
 import requests # for http GET
 import configparser # for config/ini file
+import json
  
 # our own packages from victron
 sys.path.insert(1, os.path.join(os.path.dirname(__file__), '/opt/victronenergy/dbus-systemcalc-py/ext/velib_python'))
@@ -48,7 +49,7 @@ class DbusGoeChargerService:
     self._dbusservice.add_path('/ProductId', 0xFFFF) # 
     self._dbusservice.add_path('/ProductName', productname)
     self._dbusservice.add_path('/CustomName', productname)    
-    self._dbusservice.add_path('/FirmwareVersion', int(data['version']))
+    self._dbusservice.add_path('/FirmwareVersion', data['result']['version'])
     self._dbusservice.add_path('/HardwareVersion', 2)
     # self._dbusservice.add_path('/Serial', data['sse'])
     self._dbusservice.add_path('/Connected', 1)
@@ -61,7 +62,7 @@ class DbusGoeChargerService:
     # add path values to dbus
     for path, settings in self._paths.items():
       self._dbusservice.add_path(
-        path, settings['initial'], gettextcallback=settings['textformat'], writeable=True, onchangecallback=self._handlechangedvalue)
+        path, settings['initial'], gettextcallback=settings['textformat'], writeable=True, ) #onchangecallback=self._handlechangedvalue)
 
     # last update
     self._lastUpdate = 0
@@ -165,23 +166,23 @@ class DbusGoeChargerService:
        data = self._getGoeChargerData()
        
        #send data to DBus
-       currentL1 = int(data['chargeCurrents'][0]
-       currentL2 = int(data['chargeCurrents'][1]
-       currentL3 = int(data['chargeCurrents'][2]
-       powerL1 = currentL1 * data['chargeVoltages'][0])
-       powerL2 = currentL2 * data['chargeVoltages'][1])
-       powerL3 = currentL3 * data['chargeVoltages'][2])
-       self._dbusservice['/Ac/L1/Power'] = powerL1
+       currentL1 = data['result']['loadpoints'][0]['chargeCurrents'][0]
+       currentL2 = data['result']['loadpoints'][0]['chargeCurrents'][1]
+       currentL3 = data['result']['loadpoints'][0]['chargeCurrents'][2]
+       powerL1 = (currentL1 * data['result']['loadpoints'][0]['chargeVoltages'][0])
+       powerL2 = (currentL2 * data['result']['loadpoints'][0]['chargeVoltages'][1])
+       powerL3 = (currentL3 * data['result']['loadpoints'][0]['chargeVoltages'][2])
+       self._dbusservice['/Ac/L3/Power'] = powerL1
        self._dbusservice['/Ac/L2/Power'] = powerL2
-       self._dbusservice['/Ac/L3/Power'] = powerL3
+       self._dbusservice['/Ac/L1/Power'] = powerL3
        self._dbusservice['/Ac/Power'] = (powerL1 + powerL2 + powerL3)
        # self._dbusservice['/Ac/Voltage'] = int(data['nrg'][0])
        self._dbusservice['/Current'] = max(currentL1, currentL2, currentL3)
-       self._dbusservice['/Ac/Energy/Forward'] = int(data['chargeTotalImport'])
+       self._dbusservice['/Ac/Energy/Forward'] = data['result']['loadpoints'][0]['chargedEnergy'] / 1000
        
        # self._dbusservice['/StartStop'] = int(data['alw'])
-       self._dbusservice['/SetCurrent'] = int(data['chargeCurrent'])
-       self._dbusservice['/MaxCurrent'] = int(data['chargeCurrent']) 
+       self._dbusservice['/SetCurrent'] = int(data['result']['loadpoints'][0]['chargeCurrent'])
+       self._dbusservice['/MaxCurrent'] = int(data['result']['loadpoints'][0]['chargeCurrent']) 
        
        # update chargingTime, increment charge time only on active charging (2), reset when no car connected (1)
        # timeDelta = time.time() - self._lastUpdate
@@ -189,18 +190,22 @@ class DbusGoeChargerService:
        #   self._chargingTime += timeDelta
        # elif int(data['car']) == 1:  # charging station ready, no vehicle
        #   self._chargingTime = 0
-       self._dbusservice['/ChargingTime'] = int(data['chargeDuration'])
+       self._dbusservice['/ChargingTime'] = int(data['result']['loadpoints'][0]['chargeDuration'] / 1000000000)
 
        self._dbusservice['/Mode'] = 0  # Manual, no control
        # self._dbusservice['/MCU/Temperature'] = int(data['tmp'])
+       #json_string = data
+       #json.loads(json_string)
+       true = True
+       false = False
 
        # value 'car' 1: charging station ready, no vehicle 2: vehicle loads 3: Waiting for vehicle 4: Charge finished, vehicle still connected
        status = 0
-       if int(data['charging']) == true:
+       if data['result']['loadpoints'][0]['charging'] == True:
          status = 2
-       elif int(data['connected']) == true:
+       elif data['result']['loadpoints'][0]['connected'] == True:
          status = 1
-       elif int(data['connected']) == false:
+       elif data['result']['loadpoints'][0]['connected'] == False:
          status = 0
        self._dbusservice['/Status'] = status
 
