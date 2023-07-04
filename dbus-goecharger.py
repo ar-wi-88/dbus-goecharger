@@ -22,7 +22,7 @@ from vedbus import VeDbusService
 
 
 class DbusGoeChargerService:
-  def __init__(self, servicename, paths, productname='go-eCharger', connection='go-eCharger HTTP JSON service'):
+  def __init__(self, servicename, paths, productname='Daheimladen', connection='Daheimladen HTTP JSON service'):
     config = self._getConfig()
     deviceinstance = int(config['DEFAULT']['Deviceinstance'])
     
@@ -36,7 +36,7 @@ class DbusGoeChargerService:
       '/Mode'
     ]
     
-    #get data from go-eCharger
+    #get data from Daheimladen
     data = self._getGoeChargerData()
 
     # Create the management objects, as specified in the ccgx dbus-api document
@@ -120,7 +120,7 @@ class DbusGoeChargerService:
     
     # check for response
     if not request_data:
-      raise ConnectionError("No response from go-eCharger - %s" % (URL))
+      raise ConnectionError("No response from Daheimladen - %s" % (URL))
     
     json_data = request_data.json()
     
@@ -131,7 +131,7 @@ class DbusGoeChargerService:
     if json_data[parameter] == str(value):
       return True
     else:
-      logging.warning("go-eCharger parameter %s not set to %s" % (parameter, str(value)))
+      logging.warning("Daheimladen parameter %s not set to %s" % (parameter, str(value)))
       return False
     
  
@@ -141,7 +141,7 @@ class DbusGoeChargerService:
     
     # check for response
     if not request_data:
-        raise ConnectionError("No response from go-eCharger - %s" % (URL))
+        raise ConnectionError("No response from Daheimladen - %s" % (URL))
     
     json_data = request_data.json()     
     
@@ -162,7 +162,7 @@ class DbusGoeChargerService:
  
   def _update(self):   
     try:
-       #get data from go-eCharger
+       #get data from Daheimladen
        data = self._getGoeChargerData()
        
        #send data to DBus
