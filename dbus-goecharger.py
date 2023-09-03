@@ -51,9 +51,10 @@ class DbusGoeChargerService:
     self._dbusservice.add_path('/CustomName', productname)    
     self._dbusservice.add_path('/FirmwareVersion', data['result']['version'])
     self._dbusservice.add_path('/HardwareVersion', 2)
-    # self._dbusservice.add_path('/Serial', data['sse'])
+    self._dbusservice.add_path('/Serial', data['result']['version'])
     self._dbusservice.add_path('/Connected', 1)
     self._dbusservice.add_path('/UpdateIndex', 0)
+    self._dbusservice.add_path('/Position', 0)
     
     # add paths without units
     for path in paths_wo_unit:
